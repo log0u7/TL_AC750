@@ -9,8 +9,7 @@ physical controls for profile (slider) and hard on/off (facade button).
 
 Device: MediaTek MT7628N @580 MHz, 8 MB flash / 64 MB RAM, 2T2R 2.4 GHz + 1T1R
 5 GHz (MT7610 via PCIe), 1x 100 Mb/s Ethernet, USB 2.0, micro-USB power 5V/2A.
-OpenWrt marks 8/64 devices NOT RECOMMENDED: few extra packages fit, OOM risk
-exists. WireGuard + LuCI fit comfortably in one image.
+WireGuard + LuCI fit comfortably in one image.
 
 ## Why
 
@@ -18,9 +17,7 @@ exists. WireGuard + LuCI fit comfortably in one image.
 - 3-position slider = tunnel profile (off / split / full). Facade button =
   tunnel hard on/off. WPS itself is never used: it is a security liability.
 - Facade LED = tunnel state at a glance.
-- Device LAN: one /24, gateway at the last usable IP of the range. No /25
-  split: `.127`/`.255` are broadcasts, and two subnets would need VLANs this
-  hardware does not justify.
+- Device LAN: one /24, gateway at the last usable IP of the range.
 - Declarative overlay (`config/files/`) + generated site config: an image
   rebuild is identical, no hand-poked device state.
 
