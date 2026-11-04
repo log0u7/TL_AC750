@@ -1,0 +1,24 @@
+#!/bin/sh
+# Toggle WireGuard on WPS button press
+# LED green:wps indicates WireGuard state
+
+LED="/sys/class/leds/green:wps/brightness"
+[ "$ACTION" = "pressed" ] || exit 0
+
+if ip link show wg0 2>/dev/null | grep -q "UP"; then
+	ifdown wg0 >/dev/null 2>&1
+	echo 0 > "$LED" 2>/dev/null
+	logger -t wg-toggle "WireGuard wg0 stopped"
+else
+	ifup wg0 >/dev/null 2>&1
+	sleep 2
+	if ip link show wg0 2>/dev/null | grep -q "UP"; then
+		echo 1 > "$LED" 2>/dev/null
+		logger -t wg-toggle "WireGuard wg0 started"
+	else
+		echo 0 > "$LED" 2>/dev/null
+		logger -t wg-toggle "WireGuard wg0 failed to start"
+	fi
+fi
+
+exit 0

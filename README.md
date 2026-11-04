@@ -228,3 +228,13 @@ MIT - see [LICENSE](LICENSE).
 - Original support commit (DTS, buttons/LEDs):
   https://lists.infradead.org/pipermail/lede-dev/2018-March/011566.html
 - Current DTS: https://raw.githubusercontent.com/openwrt/openwrt/main/target/linux/ramips/dts/mt76x8/tplink_tl-wr902ac-v3.dts
+
+## Buttons & switch
+
+- **WPS button (poussoir)**: toggle WireGuard (`wg0`). LED `green:wps` = WG up/down (handled by `/etc/rc.button/wps`)
+- **3-position switch** (marqué):
+  1. `Share ETH` - ?
+  2. `Share HotSpot` - ?
+  3. `AP/Rng Ext` / `Client` - ?
+
+*À documenter plus précisément selon comportement observé.*
