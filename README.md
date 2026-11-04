@@ -21,9 +21,11 @@ tftp/tftp-start.sh            dnsmasq-based TFTP server (port 69, root required)
 openwrt-imagebuilder-*/       extracted ImageBuilder (488 MB, remove with make clean)
 ```
 
-Runtime scratch (TFTP root, logs, pidfiles) lives in `/tmp/opencode/wr902ac/tftp`
-by default: dnsmasq runs as `nobody` and cannot traverse a private `$HOME`.
-Override with `TFTP_ROOT`.
+Runtime scratch (TFTP root, logs, pidfiles) lives in `/tmp/wr902ac-tftp`
+by default: dnsmasq runs as `nobody` and cannot traverse a private `$HOME`,
+and the directory must be world-traversable. Override with `TFTP_ROOT`.
+Transient key material during `provision`/`keygen` lives under `secrets/`
+(chmod 700), never in a world-readable tmp path.
 
 ## Requirements
 

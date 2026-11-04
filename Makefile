@@ -18,7 +18,7 @@ PKG_luci := $(PKG_min) luci
 # declarative config overlay: applied at first boot if config/files exists
 FILES := $(if $(wildcard $(CURDIR)/config/files),FILES=$(CURDIR)/config/files,)
 
-TFTP_ROOT ?= /tmp/opencode/wr902ac/tftp
+TFTP_ROOT ?= /tmp/wr902ac-tftp
 TFTP_IP   ?= 192.168.0.66
 DEV       ?= eth0
 CONN      ?= Connexion filaire 1
@@ -124,16 +124,16 @@ keygen: ## generate a WireGuard keypair with wg on the DEVICE, store in secrets/
 	@mkdir -p $(SECRETS) && chmod 700 $(SECRETS)
 	@if test -s $(SECRETS)/wg_router.key; then \
 		echo "keypair already exists: $(SECRETS)/wg_router.key (delete both files to rotate)"; exit 1; fi
-	@ssh $(SSH_OPTS) $(WG_HOST) 'p=$$(wg genkey); q=$$(echo "$$p" | wg pubkey); printf "%s\n%s\n" "$$p" "$$q"' > /tmp/opencode/wg_pair.txt
-	@umask 077 && head -1 /tmp/opencode/wg_pair.txt > $(SECRETS)/wg_router.key && tail -1 /tmp/opencode/wg_pair.txt > $(SECRETS)/wg_router.pub && chmod 600 $(SECRETS)/wg_router.key $(SECRETS)/wg_router.pub && rm -f /tmp/opencode/wg_pair.txt && echo "keypair: $(SECRETS)/wg_router.key + wg_router.pub"
+	@ssh $(SSH_OPTS) $(WG_HOST) 'p=$$(wg genkey); q=$$(echo "$$p" | wg pubkey); printf "%s\n%s\n" "$$p" "$$q"' > $(SECRETS)/.wg_pair
+	@umask 077 && head -1 $(SECRETS)/.wg_pair > $(SECRETS)/wg_router.key && tail -1 $(SECRETS)/.wg_pair > $(SECRETS)/wg_router.pub && chmod 600 $(SECRETS)/wg_router.key $(SECRETS)/wg_router.pub && rm -f $(SECRETS)/.wg_pair && echo "keypair: $(SECRETS)/wg_router.key + wg_router.pub"
 
 provision: ## push secrets/wg_router.key into the device wg0 config (SSH)
 	@test -s $(SECRETS)/wg_router.key || { echo "no keypair - run: make keygen"; exit 1; }
-	@mkdir -p /tmp/opencode
-	@printf '#!/bin/sh\nuci set network.wg0.private_key="%s"\nuci commit network\ntest -n "$$(uci -q get network.wg0.private_key)" && echo "private key: set"\n' "$$(cat $(SECRETS)/wg_router.key)" > /tmp/opencode/wg-provision.sh
-	@scp -O -q $(SSH_OPTS) /tmp/opencode/wg-provision.sh $(WG_HOST):/tmp/wg-provision.sh
+	@mkdir -p $(SECRETS) && chmod 700 $(SECRETS)
+	@printf '#!/bin/sh\nuci set network.wg0.private_key="%s"\nuci commit network\ntest -n "$$(uci -q get network.wg0.private_key)" && echo "private key: set"\n' "$$(cat $(SECRETS)/wg_router.key)" > $(SECRETS)/.wg-provision.sh
+	@scp -O -q $(SSH_OPTS) $(SECRETS)/.wg-provision.sh $(WG_HOST):/tmp/wg-provision.sh
 	@ssh $(SSH_OPTS) $(WG_HOST) 'sh /tmp/wg-provision.sh; rm -f /tmp/wg-provision.sh' 2>/dev/null
-	@rm -f /tmp/opencode/wg-provision.sh
+	@rm -f $(SECRETS)/.wg-provision.sh
 	@echo "router pubkey (to configure later in the server peer):"
 	@cat $(SECRETS)/wg_router.pub
 	@echo "note: peer stays incomplete (no server pubkey/endpoint yet) until the Pi exists"

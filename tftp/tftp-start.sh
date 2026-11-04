@@ -1,12 +1,12 @@
 #!/bin/bash
 # TFTP server for TL-WR902AC v3 U-Boot recovery.
 # Serves tp_recovery.bin over UDP 69 (dnsmasq, TFTP only, no DNS/DHCP).
-# Root defaults to the runtime scratch dir (/tmp/opencode/...): dnsmasq runs as
+# Root defaults to the runtime scratch dir (/tmp/wr902ac-tftp): dnsmasq runs as
 # "nobody" and cannot traverse a private $HOME. Override with TFTP_ROOT.
 # Usage: sudo env TFTP_ROOT=... TFTP_IP=... bash tftp-start.sh   (or: make tftp-serve)
 set -e
 
-ROOT="${TFTP_ROOT:-/tmp/opencode/wr902ac/tftp}"
+ROOT="${TFTP_ROOT:-/tmp/wr902ac-tftp}"
 IP="${TFTP_IP:-192.168.0.66}"
 PID="$ROOT/dnsmasq.pid"
 LOG="$ROOT/dnsmasq.log"
