@@ -98,9 +98,7 @@ tftp-serve: ## start TFTP server as root (dnsmasq, UDP 69, TFTP_IP only)
 	sudo env TFTP_ROOT=$(TFTP_ROOT) TFTP_IP=$(TFTP_IP) bash $(CURDIR)/tftp/tftp-start.sh
 
 tftp-stop: ## stop the TFTP server
-	@test -f $(TFTP_ROOT)/dnsmasq.pid || { echo "no pidfile, nothing to stop"; exit 0; }
-	sudo kill "$$(cat $(TFTP_ROOT)/dnsmasq.pid)" && rm -f $(TFTP_ROOT)/dnsmasq.pid
-	@echo "tftp stopped"
+	@sudo sh -c 'if [ -f "$(TFTP_ROOT)/dnsmasq.pid" ]; then kill "$$(cat "$(TFTP_ROOT)/dnsmasq.pid")" && rm -f "$(TFTP_ROOT)/dnsmasq.pid"; echo "tftp stopped"; else echo "no pidfile at $(TFTP_ROOT)"; fi'
 
 flash-watch: ## tail TFTP log live (transfer from the router shows up here)
 	tail -n 20 -F $(TFTP_ROOT)/dnsmasq.log | grep --line-buffered -iE 'RRQ|sent|error|ignored'
