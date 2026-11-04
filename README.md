@@ -1,25 +1,14 @@
 # TL-WR902AC v3 - OpenWrt + WireGuard travel router
 
-## What
+# TL-WR902AC v3 - OpenWrt + WireGuard travel router
 
-Build, flash and manage OpenWrt on a TP-Link TL-WR902AC v3 pocket travel
-router, with WireGuard baked in and a first-boot declarative config overlay.
-One job: route your traffic through your home tunnel when you roam, with
-physical controls for profile (slider) and hard on/off (facade button).
+Minimal OpenWrt build for the TP-Link TL-WR902AC v3, tailored for travel with
+WireGuard. Slider picks the routing profile, facade button acts as a temporary
+tunnel kill switch. Configured via `config/files/` overlay and generated site values.
 
 Device: MediaTek MT7628N @580 MHz, 8 MB flash / 64 MB RAM, 2T2R 2.4 GHz + 1T1R
 5 GHz (MT7610 via PCIe), 1x 100 Mb/s Ethernet, USB 2.0, micro-USB power 5V/2A.
 WireGuard + LuCI fit comfortably in one image.
-
-## Why
-
-- Single function: WireGuard travel router. No mode zoo.
-- 3-position slider = tunnel profile (off / split / full). Facade button =
-  tunnel hard on/off. WPS itself is never used: it is a security liability.
-- Facade LED = tunnel state at a glance.
-- Device LAN: one /24, gateway at the last usable IP of the range.
-- Declarative overlay (`config/files/`) + generated site config: an image
-  rebuild is identical, no hand-poked device state.
 
 ## Repository layout
 
@@ -209,30 +198,30 @@ TFTP recovery stays the emergency path; a TFTP reflash wipes the config
 Back to stock TP-Link firmware: strip its 512-byte header
 (`dd if=stock.bin of=tp_recovery.bin skip=257 bs=512`) and TFTP it.
 
-## Contrôles
+## Controls
 
-### Slider 3 positions
-Le switch glissant sélectionne le comportement par défaut du tunnel WireGuard :
+### 3-position slider
+The slider selects the default WireGuard routing policy:
 
-| Position | Profil | LED `green:wps` | Usage |
+| Position | Profile | LED `green:wps` | Usage |
 |---|---|---|---|
-| **Share ETH** (gauche) | `split` | Clignote 5 Hz | Seul le trafic vers ton réseau maison passe par le tunnel. Utile pour garder l'accès au réseau hôtel/café, aux imprimantes ou aux captive portals. |
-| **Share HotSpot** (milieu) | `full` | Solide | Tout le trafic passe par le tunnel. Idéal quand tu partages la connexion via ce routeur. |
-| **AP/Rng Ext / Client** (droite) | `off` | Éteinte | Aucune connexion via le tunnel, trafic direct. Le bouton WPS permet de réactiver rapidement sans bouger le switch. |
+| **Share ETH** (left) | `split` | Blink 5 Hz | Only traffic to your home network goes through the tunnel. Keeps direct access to the hotel/cafe LAN, printers or captive portals. |
+| **Share HotSpot** (middle) | `full` | Solid | All traffic goes through the tunnel. Ideal when sharing this router's connection via WiFi. |
+| **AP/Rng Ext / Client** (right) | `off` | Dark | Direct connection with no tunnel. Use the WPS button to re-enable the tunnel quickly without moving the slider. |
 
-### Bouton WPS (facade)
-Kill switch temporaire. Un appui coupe/relance `wg0` indépendamment du slider. Si coupé, le tunnel reste down jusqu'au prochain appui, mouvement du slider ou reboot.
+### WPS button (facade)
+Temporary tunnel kill switch. Pressing it toggles `wg0` up/down regardless of the slider. While killed, the tunnel stays down until the next button press, slider move or reboot.
 
-Le WPS natif n'est **pas** utilisé (risque de sécurité). LED reste éteinte tant que le tunnel est coupé par ce bouton. Au rétablissement, elle reprend l'état du slider.
+The native WPS protocol is not used (security liability). While killed, the LED stays dark. On restore, the LED follows the current slider position.
 
 ### LEDs
-| LED | Signification |
+| LED | Meaning |
 |---|---|
-| `green:wps` | État du tunnel (off/dark, blink 5Hz = split, solid = full). Éteinte si kill-switch actif. |
-| `green:power` | Alimentation |
-| `green:lan` / `green:wan` | Activité switch LAN/WAN |
-| `green:wlan` / `mt76-phy1` | Activité WiFi 2.4GHz / 5GHz |
-| `green:usb` | Actif si périphérique USB branché |
+| `green:wps` | Tunnel state (dark = off/killed, blink 5 Hz = split, solid = full) |
+| `green:power` | Power |
+| `green:lan` / `green:wan` | LAN/WAN link/activity |
+| `green:wlan` / `mt76-phy1` | 2.4GHz / 5GHz activity |
+| `green:usb` | USB device present |
 
 ## License
 
