@@ -2,12 +2,14 @@
 # Facade button: hard on/off for the WireGuard tunnel.
 # Each press toggles wg0 down/up regardless of the slider position.
 # WPS protocol unused (security liability).
+# LED follows the slider profile (split=blink, full=solid, off=dark).
 
 [ "$ACTION" = "pressed" ] || exit 0
 
 NET='wg0'
 LED=/sys/class/leds/green:wps
 KILL=/tmp/.wg-kill
+COMBO=/tmp/.slider_combo
 
 led_dark() {
     [ -d "$LED" ] || return 0
@@ -25,11 +27,20 @@ else
     ifup "$NET"
     sleep 2
     if ip link show "$NET" 2>/dev/null | grep -q UP; then
-        profile=split
-        case " $(uci -q get network.@wireguard_wg0[0].allowed_ips 2>/dev/null) " in
-            *" 0.0.0.0/0 "*) profile=full ;;
+        c="$(cat "$COMBO" 2>/dev/null)"
+        case "$c" in
+            00) /usr/bin/wg-profile off ;;
+            01) /usr/bin/wg-profile split ;;
+            10) /usr/bin/wg-profile full ;;
+            *)
+                # Fallback: infer from allowed_ips
+                case " $(uci -q get network.@wireguard_wg0[0].allowed_ips 2>/dev/null) " in
+                    *" 0.0.0.0/0 "*) /usr/bin/wg-profile full ;;
+                    *) /usr/bin/wg-profile split ;;
+                esac
+                ;;
         esac
-        exec /usr/bin/wg-profile "$profile"
+        exit 0
     fi
     logger -t wg-toggle "$NET failed to come up"
     led_dark
