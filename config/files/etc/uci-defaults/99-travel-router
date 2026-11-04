@@ -1,20 +1,13 @@
 #!/bin/sh
 # First-boot declarative config for the TL-WR902AC v3 travel router.
 # Executed once by OpenWrt preinit (this file is removed after execution).
-# Secrets (root password, WG keys, WiFi PSK) are deliberately NOT here.
+# Site values (LAN IP, hostname, timezone) are injected at build time into the
+# generated 99-site-config script (Makefile: LAN_IP, HOSTNAME, TZ).
+# Post-flash settings (WiFi, WG peer, passwords, split subnets) stay blank.
+# Secrets are deliberately NOT here.
 
-# idempotence guard: skip if already applied
-[ "$(uci -q get system.@system[0].hostname)" = "tpac750" ] && exit 0
-
-# --- identity ---
-uci set system.@system[0].hostname='tpac750'
-uci set system.@system[0].timezone='Europe/Paris'
-uci set system.@system[0].zonename='Europe/Paris'
-
-# --- LAN: 192.168.10.0/24, gateway at the top of the pool ---
-# OpenWrt 25.12 stores ipaddr in CIDR form; drop any legacy netmask option.
-uci set network.lan.ipaddr='192.168.10.254/24'
-uci -q delete network.lan.netmask
+# idempotence guard: skip if this overlay already ran
+[ "$(uci -q get network.wg0.proto)" = "wireguard" ] && exit 0
 
 # --- WireGuard skeleton (wg0): keys/endpoint set later via LuCI or SSH ---
 uci -q delete network.wg0

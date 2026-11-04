@@ -2,6 +2,7 @@
 secrets/
 tmp-build/
 openwrt-imagebuilder-*/
+config-gen/
 tftp/dnsmasq.log
 tftp/dnsmasq.pid
 

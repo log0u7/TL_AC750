@@ -17,7 +17,7 @@
 # only comes alive once keys and an endpoint exist.
 
 NET='wg0'
-SPLIT_IPS='192.168.1.0/24'
+SPLIT_IPS="$(uci -q get network.wg0.split_ips)"
 LED=/sys/class/leds/green:wps
 
 get_peer() {

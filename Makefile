@@ -12,16 +12,21 @@ IB_URL  := https://downloads.openwrt.org/releases/$(VERSION)/targets/$(TARGET)/$
 IB_DIR  := $(IB_LOC)/$(IB_NAME)
 IB_BIN  := $(IB_DIR)/bin/targets/$(TARGET)
 
+LAN_IP    ?= 192.168.10.254/24
+HOSTNAME  ?= tpac750
+TZ        ?= Europe/Paris
+GEN       := $(CURDIR)/config-gen
+
 PKG_min  := wireguard-tools luci-proto-wireguard kmod-wireguard -ppp -ppp-mod-pppoe
 PKG_luci := $(PKG_min) luci
 
-# declarative config overlay: applied at first boot if config/files exists
-FILES := $(if $(wildcard $(CURDIR)/config/files),FILES=$(CURDIR)/config/files,)
+# declarative config overlay: static files in config/files, site values in
+# config-gen (generated per build from LAN_IP/HOSTNAME/TZ)
 
 TFTP_ROOT ?= /tmp/wr902ac-tftp
 TFTP_IP   ?= 192.168.0.66
 DEV       ?= eth0
-CONN      ?= Connexion filaire 1
+CONN      ?= Connexion filaire 1  # NetworkManager profile on DEV - override for your system
 SSH_OPTS  := -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null
 PC_IPS       := 192.168.0.66/24,192.168.10.66/24
 PC_IPS_FIRST := 192.168.0.66/24,192.168.1.2/24,192.168.10.66/24
@@ -38,7 +43,7 @@ WG_IFACE  ?= wg0
 .PHONY: help deps imagebuilder image-min image-luci tftp-prepare tftp-serve tftp-stop flash-watch pc-ip pc-ip-restore provision-ssh clean
 
 help: ## show this help
-	@echo "Variables: VERSION=$(VERSION) PROFILE=$(PROFILE) VARIANT=$(VARIANT)"
+	@echo "Variables: VERSION=$(VERSION) PROFILE=$(PROFILE) VARIANT=$(VARIANT) LAN_IP=$(LAN_IP) HOSTNAME=$(HOSTNAME) TZ=$(TZ)"
 	@echo "           TFTP_ROOT=$(TFTP_ROOT) TFTP_IP=$(TFTP_IP) DEV=$(DEV) CONN=\"$(CONN)\""
 	@echo
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  %-16s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -62,8 +67,11 @@ imagebuilder: ## download + verify + extract the ImageBuilder
 	@echo "imagebuilder ready: $(IB_DIR)"
 
 define build_variant
-	mkdir -p $(3)
-	$(MAKE) -C $(IB_DIR) image PROFILE=$(PROFILE) PACKAGES="$(2)" $(FILES)
+	rm -rf $(GEN) && mkdir -p $(3) $(GEN)
+	cp -a $(CURDIR)/config/files/. $(GEN)/
+	printf '#!/bin/sh\nuci set network.lan.ipaddr="$(LAN_IP)"\nuci -q delete network.lan.netmask\nuci set system.@system[0].hostname="$(HOSTNAME)"\nuci set system.@system[0].timezone="$(TZ)"\nuci set system.@system[0].zonename="$(TZ)"\nuci commit system\nuci commit network\n' > $(GEN)/etc/uci-defaults/99-site-config
+	chmod 755 $(GEN)/etc/uci-defaults/99-site-config
+	$(MAKE) -C $(IB_DIR) image PROFILE=$(PROFILE) PACKAGES="$(2)" FILES="$(GEN)"
 	cd $(IB_BIN) && sha256sum -c sha256sums
 	cp $(IB_BIN)/openwrt-$(VERSION)-ramips-mt76x8-$(PROFILE)* $(3)/
 	@echo "== variant $(1) -> $(3) =="
@@ -97,13 +105,13 @@ tftp-stop: ## stop the TFTP server
 flash-watch: ## tail TFTP log live (transfer from the router shows up here)
 	tail -n 20 -F $(TFTP_ROOT)/dnsmasq.log | grep --line-buffered -iE 'RRQ|sent|error|ignored'
 
-pc-ip: ## set DEV static multi-subnet (0.66 recovery / 2.66 target LAN)
+pc-ip: ## set DEV static multi-subnet (0.66 recovery / 10.66 target LAN)
 	nmcli connection modify "$(CONN)" ipv4.method manual \
 		ipv4.addresses $(PC_IPS) ipv4.gateway "" ipv4.dns ""
 	nmcli device reapply $(DEV)
 	ip -4 addr show $(DEV) | grep inet
 
-pc-ip-firstboot: ## TEMPORARY: also add 192.168.1.2 to reach factory-LAN device. Blackholes home LAN on wifi. Revert with: make pc-ip
+pc-ip-firstboot: ## TEMPORARY: also add 192.168.1.2 to reach factory-LAN device. May disrupt any other interface on that subnet. Revert with: make pc-ip
 	nmcli connection modify "$(CONN)" ipv4.method manual \
 		ipv4.addresses $(PC_IPS_FIRST) ipv4.gateway "" ipv4.dns ""
 	nmcli device reapply $(DEV)
@@ -116,8 +124,8 @@ pc-ip-restore: ## revert DEV profile to DHCP (undo pc-ip)
 	nmcli device reapply $(DEV)
 	@echo "profile reverted to DHCP"
 
-clean: ## remove extracted ImageBuilder (images/ kept)
-	rm -rf $(IB_DIR) $(CURDIR)/tmp-build
+clean: ## remove extracted ImageBuilder and generated overlay (images/ kept)
+	rm -rf $(IB_DIR) $(CURDIR)/tmp-build $(GEN)
 	@echo "imagebuilder removed - images/ untouched"
 
 keygen: ## generate a WireGuard keypair with wg on the DEVICE, store in secrets/ (gitignored)
