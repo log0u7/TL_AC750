@@ -56,10 +56,26 @@ if [ -d "$LED" ]; then
     echo 0 > "$LED/brightness" 2>/dev/null
 fi
 
+# --- optimizations: no IPv6 use while roaming, faster NAT, quiet logs ---
+uci set dhcp.lan.ra='disabled'
+uci set dhcp.lan.dhcpv6='disabled'
+uci set dhcp.lan.ndp='disabled'
+uci -q delete dhcp.lan.ra_slaac
+uci -q delete dhcp.lan.ra_flags
+uci set network.lan.ipv6='0'
+uci set firewall.@defaults[0].flow_offloading='1'
+uci set dhcp.@dnsmasq[0].logqueries='0'
+/etc/init.d/odhcpd disable 2>/dev/null || true
+
+# base image ships an apk-vs-opkg login notice; the FILES= overlay can only
+# add/overwrite files, so remove it here at first boot
+rm -f /etc/profile.d/apk-cheatsheet.sh
+
 uci commit system
 uci commit network
 uci commit wireless
 uci commit firewall
+uci commit dhcp
 
 logger -t travel-router "uci-defaults applied: lan=192.168.10.254/24 wg0 skeleton wifi=off"
 exit 0

@@ -180,11 +180,11 @@ comes alive once keys and an endpoint exist.
 | Custom `/etc/banner` + `/etc/motd` | orientation at login |
 | `/etc/config/led`: usb=`usbport`, wps=tunnel indicator, wlan=`netdev` | useful signals only |
 
-Persistence: banner, motd, LED config and the button script live in the
-overlay (`config/files/`) and survive reflashes. The uci tweaks (IPv6, flow
-offloading, dnsmasq, odhcpd) and the apk-notice removal are runtime state:
-a factory reset or a reflash from the current image reverts them until they
-are baked into `config/files/etc/uci-defaults/`.
+Persistence: everything above is baked into the overlay (`config/files/`).
+The uci tweaks (IPv6, flow offloading, dnsmasq, odhcpd) and the apk-notice
+removal run once at first boot via `99-travel-router` (the `FILES=` overlay
+can only add/overwrite files, so the notice is deleted by the script
+instead). A factory reset or reflash reapplies all of it.
 
 ## Upgrades
 

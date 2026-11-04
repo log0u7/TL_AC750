@@ -1,24 +1,38 @@
 #!/bin/sh
-# Toggle WireGuard on WPS button press
-# LED green:wps indicates WireGuard state
+# Facade button: hard on/off for the WireGuard tunnel.
+# Each press toggles wg0 down/up regardless of the slider position. The
+# slider keeps its selected profile; any slider move (or reboot) restores
+# the tunnel with it (wg-profile ends with ifup wg0).
+# LED green:wps always reflects the wg-profile semantics (dark/blink/solid).
 
-LED="/sys/class/leds/green:wps/brightness"
 [ "$ACTION" = "pressed" ] || exit 0
 
-if ip link show wg0 2>/dev/null | grep -q "UP"; then
-	ifdown wg0 >/dev/null 2>&1
-	echo 0 > "$LED" 2>/dev/null
-	logger -t wg-toggle "WireGuard wg0 stopped"
-else
-	ifup wg0 >/dev/null 2>&1
-	sleep 2
-	if ip link show wg0 2>/dev/null | grep -q "UP"; then
-		echo 1 > "$LED" 2>/dev/null
-		logger -t wg-toggle "WireGuard wg0 started"
-	else
-		echo 0 > "$LED" 2>/dev/null
-		logger -t wg-toggle "WireGuard wg0 failed to start"
-	fi
-fi
+NET='wg0'
+LED=/sys/class/leds/green:wps
 
-exit 0
+led_dark() {
+    [ -d "$LED" ] || return 0
+    echo none > "$LED/trigger" 2>/dev/null
+    echo 0 > "$LED/brightness" 2>/dev/null
+}
+
+if ip link show "$NET" 2>/dev/null | grep -q UP; then
+    ifdown "$NET"
+    led_dark
+    logger -t wg-toggle "$NET down (kill switch)"
+else
+    ifup "$NET"
+    sleep 2
+    if ip link show "$NET" 2>/dev/null | grep -q UP; then
+        # Re-assert the current profile so the LED matches it (split blinks,
+        # full is solid) instead of forcing solid. wg-profile is idempotent
+        # here: it re-derives allowed_ips, commits and sets the LED.
+        profile=split
+        case " $(uci -q get network.@wireguard_wg0[0].allowed_ips 2>/dev/null) " in
+            *" 0.0.0.0/0 "*) profile=full ;;
+        esac
+        exec /usr/bin/wg-profile "$profile"
+    fi
+    logger -t wg-toggle "$NET failed to come up"
+    led_dark
+fi
