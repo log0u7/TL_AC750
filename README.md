@@ -195,9 +195,9 @@ Back to stock TP-Link firmware: strip its 512-byte header
 - Stock firmware refuses OpenWrt via web upgrade: TFTP recovery is the only entry.
 - Reflashing resets the SSH host key and wipes the config: `ssh-keygen -R <ip>`,
   then re-run `make provision`.
-- dropbear: `RootPasswordAuth=off` can block root logins entirely (including
-  pubkey) on some builds; prefer `PasswordAuth=off` alone and test SSH right
-  after each apply.
+- dropbear on this build: running with `PasswordAuth=off` (-s) breaks pubkey
+  auth entirely - at boot and after restarts alike. Keep `PasswordAuth=on`
+  and rely on a strong root password; test any SSH change immediately.
 - The device has no RTC/NTP until it gets uplink: logread timestamps drift.
 
 ## Design decisions

@@ -61,12 +61,5 @@ uci commit network
 uci commit wireless
 uci commit firewall
 
-# SSH hardening: key-only access (the pubkey lives in /etc/dropbear/authorized_keys
-# from this same overlay). Do NOT restart dropbear here: a dropbear restart
-# after boot breaks pubkey auth on this build until the next restart. The flag
-# applies at the next reboot / at first boot it never needed a restart.
-uci set dropbear.main.PasswordAuth='off'
-uci commit dropbear
-
 logger -t travel-router "uci-defaults applied: lan=192.168.10.254/24 wg0 skeleton wifi=off"
 exit 0
