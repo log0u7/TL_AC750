@@ -209,14 +209,30 @@ TFTP recovery stays the emergency path; a TFTP reflash wipes the config
 Back to stock TP-Link firmware: strip its 512-byte header
 (`dd if=stock.bin of=tp_recovery.bin skip=257 bs=512`) and TFTP it.
 
-## Hardware reference (buttons/LEDs)
+## Contrôles
 
-| Item | Code | Action in this build |
-|---|---|---|
-| Reset | KEY_RESTART | stock: reboot / long = factory reset / boot failsafe |
-| Facade button | KEY_WPS_BUTTON | WG hard on/off (`/etc/rc.button/wps`); WPS protocol unused |
-| 3-pos slider | BTN_0 + BTN_1 | WG profile: 00=off / 01=split / 10=full, left to right (`/etc/hotplug.d/button/90-slider-wg`) |
-| Facade LED | `green:wps` | tunnel indicator: dark=off, blink 5 Hz=split, solid=full; dark while killed (binary LED, max_brightness=1) |
+### Slider 3 positions
+Le switch glissant sélectionne le comportement par défaut du tunnel WireGuard :
+
+| Position | Profil | LED `green:wps` | Usage |
+|---|---|---|---|
+| **Share ETH** (gauche) | `split` | Clignote 5 Hz | Seul le trafic vers ton réseau maison passe par le tunnel. Utile pour garder l'accès au réseau hôtel/café, aux imprimantes ou aux captive portals. |
+| **Share HotSpot** (milieu) | `full` | Solide | Tout le trafic passe par le tunnel. Idéal quand tu partages la connexion via ce routeur. |
+| **AP/Rng Ext / Client** (droite) | `off` | Éteinte | Aucune connexion via le tunnel, trafic direct. Le bouton WPS permet de réactiver rapidement sans bouger le switch. |
+
+### Bouton WPS (facade)
+Kill switch temporaire. Un appui coupe/relance `wg0` indépendamment du slider. Si coupé, le tunnel reste down jusqu'au prochain appui, mouvement du slider ou reboot.
+
+Le WPS natif n'est **pas** utilisé (risque de sécurité). LED reste éteinte tant que le tunnel est coupé par ce bouton. Au rétablissement, elle reprend l'état du slider.
+
+### LEDs
+| LED | Signification |
+|---|---|
+| `green:wps` | État du tunnel (off/dark, blink 5Hz = split, solid = full). Éteinte si kill-switch actif. |
+| `green:power` | Alimentation |
+| `green:lan` / `green:wan` | Activité switch LAN/WAN |
+| `green:wlan` / `mt76-phy1` | Activité WiFi 2.4GHz / 5GHz |
+| `green:usb` | Actif si périphérique USB branché |
 
 ## License
 
