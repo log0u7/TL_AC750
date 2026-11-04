@@ -199,6 +199,11 @@ Back to stock TP-Link firmware: strip its 512-byte header
   auth entirely - at boot and after restarts alike. Keep `PasswordAuth=on`
   and rely on a strong root password; test any SSH change immediately.
 - The device has no RTC/NTP until it gets uplink: logread timestamps drift.
+- Factory reset (long reset press, `firstboot`) re-runs the uci-defaults baked
+  into `/rom`: reflash the image after any overlay change, or a reset restores
+  a stale overlay.
+- After changing `TFTP_ROOT`, restart the TFTP server (`make tftp-stop` +
+  `make tftp-serve`): a running dnsmasq keeps serving its original root.
 
 ## Design decisions
 
