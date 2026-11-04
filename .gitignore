@@ -1,0 +1,10 @@
+# local secrets - never commit
+secrets/
+tmp-build/
+openwrt-imagebuilder-*/
+tftp/dnsmasq.log
+tftp/dnsmasq.pid
+
+# reproducible image payloads (rebuild with make image-*; manifests+sha256sums stay)
+images/*/*.bin
+tftp/tp_recovery.bin

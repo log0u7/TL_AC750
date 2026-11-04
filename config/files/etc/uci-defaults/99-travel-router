@@ -1,0 +1,72 @@
+#!/bin/sh
+# First-boot declarative config for the TL-WR902AC v3 travel router.
+# Executed once by OpenWrt preinit (this file is removed after execution).
+# Secrets (root password, WG keys, WiFi PSK) are deliberately NOT here.
+
+# idempotence guard: skip if already applied
+[ "$(uci -q get system.@system[0].hostname)" = "tpac750" ] && exit 0
+
+# --- identity ---
+uci set system.@system[0].hostname='tpac750'
+uci set system.@system[0].timezone='Europe/Paris'
+uci set system.@system[0].zonename='Europe/Paris'
+
+# --- LAN: 192.168.10.0/24, gateway at the top of the pool ---
+# OpenWrt 25.12 stores ipaddr in CIDR form; drop any legacy netmask option.
+uci set network.lan.ipaddr='192.168.10.254/24'
+uci -q delete network.lan.netmask
+
+# --- WireGuard skeleton (wg0): keys/endpoint set later via LuCI or SSH ---
+uci -q delete network.wg0
+uci set network.wg0=interface
+uci set network.wg0.proto='wireguard'
+uci set network.wg0.listen_port='51820'
+uci add_list network.wg0.addresses='10.99.0.2/32'
+uci set network.wg0.route_allowed_ips='1'
+
+# peer skeleton: allowed_ips default = full profile (flipped by wg-profile)
+PEER="$(uci -q add network wireguard_wg0)"
+uci set network."$PEER".description='home'
+uci set network."$PEER".endpoint_port='51820'
+uci set network."$PEER".persistent_keepalive='25'
+uci add_list network."$PEER".allowed_ips='0.0.0.0/0'
+uci add_list network."$PEER".allowed_ips='::/0'
+
+# --- firewall: wgvpn zone, lan -> wgvpn forwarding, masquerade out the tunnel ---
+uci -q delete firewall.wgzone
+ZONE="$(uci add firewall zone)"
+uci rename firewall."$ZONE"='wgzone'
+uci set firewall.wgzone.name='wgvpn'
+uci set firewall.wgzone.input='ACCEPT'
+uci set firewall.wgzone.output='ACCEPT'
+uci set firewall.wgzone.forward='REJECT'
+uci set firewall.wgzone.masq='1'
+uci add_list firewall.wgzone.network='wg0'
+
+FWD="$(uci add firewall forwarding)"
+uci rename firewall."$FWD"='lan2wg'
+uci set firewall.lan2wg.src='lan'
+uci set firewall.lan2wg.dest='wgvpn'
+
+# --- WiFi: no factory SSID, radios explicitly off (enabled per trip, in LuCI/SSH) ---
+for s in $(uci show wireless 2>/dev/null | sed -n "s/^wireless\.\([^.]*\)=wifi-iface$/\1/p"); do
+    uci -q delete wireless."$s"
+done
+for r in $(uci show wireless 2>/dev/null | sed -n "s/^wireless\.\([^.]*\)\.type=.*/\1/p"); do
+    uci set wireless."$r".disabled='1'
+done
+
+# --- LED green:wps: tunnel indicator starts dark ---
+LED=/sys/class/leds/green:wps
+if [ -d "$LED" ]; then
+    echo none > "$LED/trigger" 2>/dev/null
+    echo 0 > "$LED/brightness" 2>/dev/null
+fi
+
+uci commit system
+uci commit network
+uci commit wireless
+uci commit firewall
+
+logger -t travel-router "uci-defaults applied: lan=192.168.10.254/24 wg0 skeleton wifi=off"
+exit 0

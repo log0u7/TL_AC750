@@ -1,0 +1,92 @@
+#!/bin/sh
+# WireGuard profile toggle for the TL-WR902AC v3 travel router.
+#
+#   wg-profile off|split|full
+#
+# Profiles flip the wg peer allowed_ips:
+#   off   - interface disabled (direct hotel access)
+#   split - only home subnets go through the tunnel
+#   full  - everything goes through the tunnel (0.0.0.0/0 ::/0)
+#
+# LED green:wps reflects the requested profile:
+#   dark      = off
+#   blink 5Hz = split
+#   solid     = full
+#
+# The choice is committed to uci, so it survives reboots; the tunnel itself
+# only comes alive once keys and an endpoint exist.
+
+NET='wg0'
+SPLIT_IPS='192.168.1.0/24'
+LED=/sys/class/leds/green:wps
+
+get_peer() {
+    for s in $(uci show network | sed -n "s/^network\.\([^.]*\)=wireguard_wg0$/\1/p"); do
+        echo "$s"
+        return 0
+    done
+    return 1
+}
+
+set_led() {
+    mode="$1"
+    [ -d "$LED" ] || return 0
+    case "$mode" in
+        off)
+            echo none > "$LED/trigger" 2>/dev/null
+            echo 0 > "$LED/brightness" 2>/dev/null
+            ;;
+        blink)
+            echo timer > "$LED/trigger" 2>/dev/null
+            echo 100 > "$LED/delay_on" 2>/dev/null
+            echo 100 > "$LED/delay_off" 2>/dev/null
+            ;;
+        solid)
+            echo none > "$LED/trigger" 2>/dev/null
+            echo 255 > "$LED/brightness" 2>/dev/null
+            ;;
+    esac
+}
+
+case "${1:-show}" in
+    off)
+        uci set network."$NET".disabled='1'
+        set_led off
+        ;;
+    split|full)
+        uci -q delete network."$NET".disabled
+        peer="$(get_peer)" || { echo "no wireguard peer configured"; exit 1; }
+        uci -q delete network."$peer".allowed_ips
+        case "$1" in
+            split)
+                for ip in $SPLIT_IPS; do
+                    uci add_list network."$peer".allowed_ips="$ip"
+                done
+                set_led blink
+                ;;
+            full)
+                uci add_list network."$peer".allowed_ips='0.0.0.0/0'
+                uci add_list network."$peer".allowed_ips='::/0'
+                set_led solid
+                ;;
+        esac
+        ;;
+    show)
+        cur="$(get_peer)"
+        if [ -n "$cur" ]; then
+            echo "allowed_ips: $(uci -q get network."$cur".allowed_ips)"
+        fi
+        echo "disabled:    $(uci -q get network."$NET".disabled || echo 0)"
+        echo "handshake:   $(wg show "$NET" latest-handshakes 2>/dev/null || echo none)"
+        exit 0
+        ;;
+    *)
+        echo "usage: wg-profile off|split|full|show"
+        exit 2
+        ;;
+esac
+
+uci commit network
+ifup "$NET" 2>/dev/null || true
+logger -t wg-profile "profile set to $1"
+echo "wg profile: $1"

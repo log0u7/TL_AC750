@@ -1,0 +1,50 @@
+#!/bin/sh
+# 3-position slider decoder -> WireGuard profile.
+#
+# The slider exposes two GPIO buttons (BTN_0 + BTN_1, gpio-keys-polled).
+# Each move emits pressed/released events; we track both bits and act only
+# when the resulting combination CHANGES. Three consecutive combinations are
+# physically reachable; which three depends on the switch wiring.
+#
+# Default mapping (calibrated 2026-11-04: slider emits 00/01/10, left to right):
+#   00 -> off    01 -> split    10 -> full
+# Every move is logged (`logread -f slider`) for recalibration if wiring differs.
+
+SUBSYS_OK="$SUBSYSTEM"
+[ "$SUBSYSTEM" = "button" ] || exit 0
+
+MAP_OFF='00'
+MAP_SPLIT='01'
+MAP_FULL='10'
+
+B0=/tmp/.slider_b0
+B1=/tmp/.slider_b1
+COMBO=/tmp/.slider_combo
+
+b0=$(cat "$B0" 2>/dev/null || echo 0)
+b1=$(cat "$B1" 2>/dev/null || echo 0)
+
+case "$BUTTON:$ACTION" in
+    btn0:pressed|BTN_0:pressed)  b0=1 ;;
+    btn0:released|BTN_0:released) b0=0 ;;
+    btn1:pressed|BTN_1:pressed)  b1=1 ;;
+    btn1:released|BTN_1:released) b1=0 ;;
+    *) exit 0 ;;
+esac
+
+echo "$b0" > "$B0"
+echo "$b1" > "$B1"
+
+combo="$b0$b1"
+[ "$combo" = "$(cat "$COMBO" 2>/dev/null)" ] && exit 0
+echo "$combo" > "$COMBO"
+logger -t slider "combo=$combo b0=$b0 b1=$b1 button=$BUTTON action=$ACTION"
+
+case "$combo" in
+    "$MAP_OFF")   profile=off ;;
+    "$MAP_SPLIT") profile=split ;;
+    "$MAP_FULL")  profile=full ;;
+    *) exit 0 ;;
+esac
+
+exec /usr/bin/wg-profile "$profile"
