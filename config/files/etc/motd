@@ -1,0 +1,5 @@
+tpac750 ready
+
+Use 'wg show' for WireGuard status
+WPS button toggles wg0 (green:wps LED)
+
