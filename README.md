@@ -1,10 +1,9 @@
-# TL-WR902AC v3 - OpenWrt + WireGuard travel router
+# TL-AC750 (TP-Link TL-WR902AC v3) - OpenWrt + WireGuard travel router
 
-# TL-WR902AC v3 - OpenWrt + WireGuard travel router
-
-Minimal OpenWrt build for the TP-Link TL-WR902AC v3, tailored for travel with
-WireGuard. Slider picks the routing profile, facade button acts as a temporary
-tunnel kill switch. Configured via `config/files/` overlay and generated site values.
+Minimal OpenWrt build for the TP-Link TL-WR902AC v3 (AC750 WiFi Travel Router),
+tailored for travel with WireGuard. Slider picks the routing policy, front panel
+button acts as a temporary tunnel kill switch. Configured via `config/files/`
+overlay and generated site values.
 
 Device: MediaTek MT7628N @580 MHz, 8 MB flash / 64 MB RAM, 2T2R 2.4 GHz + 1T1R
 5 GHz (MT7610 via PCIe), 1x 100 Mb/s Ethernet, USB 2.0, micro-USB power 5V/2A.
@@ -209,7 +208,7 @@ The slider selects the default WireGuard routing policy:
 | **Share HotSpot** (middle) | `full` | Solid | All traffic goes through the tunnel. Ideal when sharing this router's connection via WiFi. |
 | **AP/Rng Ext / Client** (right) | `off` | Dark | Direct connection with no tunnel. Use the WPS button to re-enable the tunnel quickly without moving the slider. |
 
-### WPS button (facade)
+### Front panel button (WPS)
 Temporary tunnel kill switch. Pressing it toggles `wg0` up/down regardless of the slider. While killed, the tunnel stays down until the next button press, slider move or reboot.
 
 The native WPS protocol is not used (security liability). While killed, the LED stays dark. On restore, the LED follows the current slider position.
