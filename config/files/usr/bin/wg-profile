@@ -54,16 +54,23 @@ case "${1:-show}" in
         set_led off
         ;;
     split|full)
-        uci -q delete network."$NET".disabled
         peer="$(get_peer)" || { echo "no wireguard peer configured"; exit 1; }
-        uci -q delete network."$peer".allowed_ips
         case "$1" in
             split)
                 [ -n "$SPLIT_IPS" ] || { echo "split profile requires network.wg0.split_ips (uci set network.wg0.split_ips='a.b.c.d/e ...')"; exit 1; }
+                uci -q delete network."$NET".disabled
+                uci -q delete network."$peer".allowed_ips
                 for ip in $SPLIT_IPS; do
                     uci add_list network."$peer".allowed_ips="$ip"
                 done
                 set_led blink
+                ;;
+            full)
+                uci -q delete network."$NET".disabled
+                uci -q delete network."$peer".allowed_ips
+                uci add_list network."$peer".allowed_ips='0.0.0.0/0'
+                uci add_list network."$peer".allowed_ips='::/0'
+                set_led solid
                 ;;
             full)
                 uci add_list network."$peer".allowed_ips='0.0.0.0/0'

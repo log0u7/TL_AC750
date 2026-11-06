@@ -43,7 +43,8 @@ PKG_luci := wireguard-tools luci-proto-wireguard kmod-wireguard luci $(PKG_DOH) 
 TFTP_ROOT ?= /tmp/wr902ac-tftp
 TFTP_IP   ?= 192.168.0.66
 DEV       ?= eth0
-CONN      ?= Connexion filaire 1  # NetworkManager profile on DEV - override for your system
+# NetworkManager profile on DEV - override for your system (quote if name has spaces)
+CONN      ?= Connexion filaire 1
 SSH_OPTS  := -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null
 PC_IPS       := 192.168.0.66/24,192.168.10.66/24
 PC_IPS_FIRST := 192.168.0.66/24,192.168.1.2/24,192.168.10.66/24

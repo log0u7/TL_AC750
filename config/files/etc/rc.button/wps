@@ -24,22 +24,20 @@ if ip link show "$NET" 2>/dev/null | grep -q UP; then
     logger -t wg-toggle "$NET down (kill switch)"
 else
     rm -f "$KILL"
-    ifup "$NET"
-    sleep 2
+    c="$(cat "$COMBO" 2>/dev/null)"
+    case "$c" in
+        00) /usr/bin/wg-profile off ;;
+        01) /usr/bin/wg-profile split ;;
+        10) /usr/bin/wg-profile full ;;
+        *)
+            # Fallback: infer from allowed_ips
+            case " $(uci -q get network.@wireguard_wg0[0].allowed_ips 2>/dev/null) " in
+                *" 0.0.0.0/0 "*) /usr/bin/wg-profile full ;;
+                *) /usr/bin/wg-profile split ;;
+            esac
+            ;;
+    esac
     if ip link show "$NET" 2>/dev/null | grep -q UP; then
-        c="$(cat "$COMBO" 2>/dev/null)"
-        case "$c" in
-            00) /usr/bin/wg-profile off ;;
-            01) /usr/bin/wg-profile split ;;
-            10) /usr/bin/wg-profile full ;;
-            *)
-                # Fallback: infer from allowed_ips
-                case " $(uci -q get network.@wireguard_wg0[0].allowed_ips 2>/dev/null) " in
-                    *" 0.0.0.0/0 "*) /usr/bin/wg-profile full ;;
-                    *) /usr/bin/wg-profile split ;;
-                esac
-                ;;
-        esac
         exit 0
     fi
     logger -t wg-toggle "$NET failed to come up"
