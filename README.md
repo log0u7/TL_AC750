@@ -1,228 +1,222 @@
-# TL-AC750 (TP-Link TL-WR902AC v3) - OpenWrt + WireGuard travel router
+# TL-AC750 (TP-Link TL-WR902AC v3) — Secure OpenWrt travel router
 
-Minimal OpenWrt build for the TP-Link TL-WR902AC v3 (AC750 WiFi Travel Router),
-tailored for travel with WireGuard. Slider picks the routing policy, front panel
-button acts as a temporary tunnel kill switch. Configured via `config/files/`
-overlay and generated site values.
+Minimal, hardened OpenWrt build for the TP-Link TL-WR902AC v3 (AC750 WiFi Travel
+Router), designed for travel/public networks. It combines WireGuard with physical
+controls (3-position slider + front panel button) and optional encrypted DNS
+(DoH). Config is applied via an ImageBuilder overlay (`config/files/`) and
+generated site values.
+
+> Security note: this project **hardens** travel use; it does not guarantee
+> anonymity or complete protection. Effectiveness depends on your WireGuard
+> server, peer config, upstream DNS choice, captive portal behavior, and
+> post-flash settings.
 
 Device: MediaTek MT7628N @580 MHz, 8 MB flash / 64 MB RAM, 2T2R 2.4 GHz + 1T1R
 5 GHz (MT7610 via PCIe), 1x 100 Mb/s Ethernet, USB 2.0, micro-USB power 5V/2A.
-WireGuard + LuCI fit comfortably in one image.
+WireGuard + LuCI fit in one image; optional DoH adds packages and must be
+validated for flash/RAM headroom.
+
+## Security posture (factual)
+
+| Area | Current behavior | Limits |
+|---|---|---|
+| Tunnel | WireGuard `wg0` skeleton + `off/split/full` profiles; slider selects profile; front panel button is a temporary kill switch | WG full tunnel routes through your peer, not anonymity. Split profile needs `network.wg0.split_ips`. |
+| DNS | Default: system DNS behavior. Optional: DoH via `https-dns-proxy` to a selected provider (`DOH=...`) | `DNS_REDIRECT=1` can reduce DNS leaks (53/853 interception) but **may break captive portals**; default is `0`. Apps can still use hardcoded/non-DNS methods in some cases. |
+| Services | WiFi radios off by default, no factory SSID; IPv6 disabled on LAN; `odhcpd` disabled; explicit NTP client | You enable WiFi/SSID/PSK post-flash for each trip. |
+| SSH | Key baked via overlay; conservative dropbear defaults (`SSHKeepAlive`, `GatewayPorts=0`, `MaxAuthTries=3`, port 22) | **Do not bake `RootPasswordAuth=off`** on TL-WR902AC v3/OpenWrt 25.12.6 (observed pubkey lockout/flapping; see gotchas). |
+| Updates | No OTA; rebuild/flash on new OpenWrt releases | TFTP recovery rewrites firmware config; sysupgrade preserves config unless `-n`. |
 
 ## Repository layout
 
 ```
 Makefile                      build + flash toolkit (see `make help`)
 config/files/                 static declarative overlay (FILES=, first boot)
-config-gen/                   generated per build: site values (LAN_IP, HOSTNAME, TZ)
-images/                       built images per variant (manifests + checksums kept in git, payloads excluded)
+config-gen/                   generated per build: site values and optional DoH config
+images/                       built images per variant (manifests/checksums kept; payloads excluded)
 tftp/tftp-start.sh            dnsmasq-based TFTP server (port 69, root required)
 ```
 
-Runtime scratch (TFTP root, logs, pidfiles) lives in `/tmp/wr902ac-tftp`
-by default: dnsmasq runs as `nobody` and cannot traverse a private `$HOME`,
-so the directory must be world-traversable. Override with `TFTP_ROOT`.
-Transient key material during `keygen`/`provision` lives under `secrets/`
-(chmod 700), never in a world-readable tmp path.
+Runtime scratch (TFTP root, logs, pidfiles) lives in `/tmp/wr902ac-tftp` by
+default (`TFTP_ROOT` overrides). Transient key material during `keygen`/
+`provision` lives under `secrets/` (chmod 700).
 
 ## Requirements
 
 Linux host with `make gcc zstd xz file python3 gawk curl` (`make deps` checks).
-TFTP serving needs root (port 69) and, if a firewall is active, an allow rule
-for UDP 69 inbound on the cabled interface (the start script adds it for ufw).
+TFTP serving needs root (port 69). If a firewall is active, allow UDP 69 inbound
+on the cabled interface.
 
-## Build
+## Build options
 
-Both variants include `wireguard-tools`, `luci-proto-wireguard`,
-`kmod-wireguard` and drop `ppp`/`ppp-mod-pppoe`.
+Both variants include WireGuard packages and drop `ppp`/`ppp-mod-pppoe`.
 
-- `min`: no web UI. SSH-only. Smallest footprint.
-- `luci`: full LuCI web UI over HTTP. Fits alongside WireGuard.
-
-```
-make image-min     # -> images/min/
-make image-luci    # -> images/luci/
-```
-
-Each build verifies its outputs against `sha256sums` before installing them
-into `images/<variant>/`. The image payload `.bin` files are not tracked in
-git: rebuild them from this repo (the manifests and checksums pin what was
-built).
-
-Site values are injected into a generated `99-site-config` uci-defaults script
-(executed once at first boot). Override on the command line or edit the
-defaults:
-
-| Variable  | Default            | Effect |
+| Var | Default | Effect |
 |---|---|---|
-| `LAN_IP`  | `192.168.10.254/24` | router LAN address (CIDR required on OpenWrt 25.12) |
-| `HOSTNAME`| `tpac750`           | system hostname |
-| `TZ`      | `Europe/Paris`      | system timezone |
+| `VARIANT` | `luci` | `min` (SSH-only) or `luci` (web UI) |
+| `LAN_IP` | `192.168.10.254/24` | router LAN address (CIDR) |
+| `HOSTNAME` | `tpac750` | system hostname |
+| `TZ` | `Europe/Paris` | timezone/zonename (build-time) |
+| `NTP_SERVERS` | OpenWrt pool (4 servers) | explicit `system.ntp` client, `enable_server=0` |
+| `DOH` | `off` | `off|quad9|quad9-unfiltered|cloudflare|adguard|dns4eu|google|custom` |
+| `DOH_CUSTOM_URL` | empty | required when `DOH=custom` (RFC 8484 URL). Hook for self-hosted resolver / Raspberry Pi DoH endpoint. |
+| `DOH_BOOTSTRAP` | provider-specific | bootstrap DNS IPs for resolving the DoH hostname |
+| `DNS_REDIRECT` | `0` | `1` sets `https-dns-proxy force_dns=1` (intercepts LAN DNS ports). **May break captive portals**. |
+| `DNS_REDIRECT_PORTS` | `53 853` | ports intercepted when `DNS_REDIRECT=1` |
+| `SSH_KEEPALIVE` | `60` | dropbear `SSHKeepAlive` |
 
-```
-make image-luci LAN_IP=192.168.1.1/24 HOSTNAME=travelrouter
+```sh
+make image-min
+make image-luci
+make image-luci DOH=quad9 DNS_REDIRECT=0
+make image-luci DOH=custom DOH_CUSTOM_URL='https://dns.example.net/dns-query' DOH_BOOTSTRAP='192.168.10.2'
 ```
 
-Pick any RFC1918 subnet that does not collide with networks you will roam in.
-The DHCP pool follows the LAN automatically.
+Provider endpoints are selected from common defaults in the Makefile; verify the
+exact endpoint/policy for your region before relying on it. Quad9 service for
+France was announced to stop on 2026-11-24, so keep an alternate provider/custom
+endpoint ready.
+
+When `DOH!=off`, the build adds `https-dns-proxy` (+ `luci-app-https-dns-proxy`
+for `luci`) and generates `99-doh-config`, replacing package default instances.
+On this 8 MB / 64 MB target, **validate image size and runtime RAM** before
+deployment.
 
 ## Flash (U-Boot TFTP recovery)
 
-The stock TP-Link firmware rejects OpenWrt signatures, so the ONLY way in is
-the U-Boot TFTP recovery mode. The bootloader requests a file named
-`tp_recovery.bin` from a TFTP server hardcoded at `192.168.0.66`.
+The stock TP-Link firmware rejects OpenWrt signatures, so the only entry path is
+U-Boot TFTP recovery. The bootloader requests `tp_recovery.bin` from a TFTP
+server hardcoded at `192.168.0.66`.
 
+```sh
+make tftp-prepare VARIANT=luci
+make pc-ip
+make tftp-serve      # sudo
+make flash-watch
 ```
-make tftp-prepare VARIANT=luci   # stage the tftp-recovery image
-make pc-ip                       # DEV: 192.168.0.66 + 192.168.10.66
-make tftp-serve                  # sudo: start dnsmasq TFTP-only on 192.168.0.66
-make flash-watch                 # live log: router request + file sent
-```
-
-`make pc-ip` uses the recovery address plus the address matching the LAN_IP
-plan below; it collides with nothing else. Then, physically:
 
 1. Router unplugged, LEDs dark.
-2. Hold the reset pinhole.
-3. Plug USB power WHILE holding, keep held ~8 s (fast LED flicker = recovery
-   mode / download starting), release once it flickers fast.
-4. Write takes ~1 min (occasional LED blinks), auto-reboot. DO NOT cut power.
+2. Hold reset.
+3. Plug USB power while holding, keep held ~8 s (fast LED flicker = recovery).
+4. Write takes ~1 min, auto-reboot. Do not cut power.
 
 ## Addressing plan
 
 | Role | Address |
 |---|---|
-| Recovery (U-Boot TFTP, hardcoded) | `192.168.0.66` on the PC |
-| Router LAN (build default) | `192.168.10.254/24` |
-| PC on the router LAN | `192.168.10.66/24` |
+| Recovery (U-Boot TFTP) | `192.168.0.66` on the PC |
+| Router LAN (default) | `192.168.10.254/24` |
+| PC on router LAN | `192.168.10.66/24` |
 
-Keep exactly one interface per subnet on the flash host: a second interface on
-a subnet already reached by another path blackholes that path (connected route
-with lower metric wins).
+Pick an RFC1918 subnet that does not collide with networks you roam in.
 
 ## First boot
 
-The declarative overlay applies once at first boot: hostname, LAN address,
-WireGuard `wg0` skeleton (no keys, no peer) with a dedicated firewall zone and
-lan->wgvpn forwarding, no factory SSID, WiFi radios disabled, `green:wps` LED
-dark. What stays blank is configured post-flash:
+The overlay applies once at first boot: hostname/LAN, WireGuard `wg0` skeleton
+(no keys/peer), dedicated firewall zone with lan->wgvpn forwarding, no factory
+SSID, WiFi radios disabled, WPS LED dark, NTP client, conservative dropbear
+settings.
 
 | Setting | How |
 |---|---|
 | root password | `passwd` over SSH, or first LuCI login |
 | WiFi SSID/PSK | LuCI > Network > Wireless, or uci |
-| WG peer (server pubkey, endpoint) | LuCI > Network > Interfaces > wg0, or uci |
+| WG peer (server pubkey, endpoint) | LuCI/LuCI-proto-wireguard or uci |
 | split-tunnel subnets | `uci set network.wg0.split_ips='a.b.c.d/e ...'` |
 
 ## WireGuard
 
 ### Key provisioning
 
-Keys are generated with `wg genkey` on the device itself and stored under
-`secrets/` (gitignored, chmod 600); nothing hand-typed, nothing committed.
-
-```
+```sh
 make keygen       # keypair generated ON the device, stored in secrets/
-make provision    # push wg_router.key into the device wg0 config over SSH
-                  # prints the router pubkey: use it in the SERVER peer config
+make provision    # push private key into device wg0 config
 ```
 
-Rotation: delete `secrets/wg_router.key` + `wg_router.pub`, re-run both targets.
-The peer ships empty on purpose: a wg interface with no valid peer simply
-stays down and does not disturb the rest of the network.
+Rotation: delete `secrets/wg_router.key` + `wg_router.pub`, rerun both.
 
-### Tunnel controls
+### Profiles
 
-`/usr/bin/wg-profile off|split|full|show` flips the wg peer `allowed_ips`:
+`/usr/bin/wg-profile off|split|full|show` flips peer `allowed_ips` and commits
+config:
 
 | Profile | allowed_ips | LED green:wps |
 |---|---|---|
 | off | interface disabled | dark |
-| split | `network.wg0.split_ips` value | blink 5 Hz |
+| split | `network.wg0.split_ips` | blink 5 Hz |
 | full | `0.0.0.0/0 ::/0` | solid |
 
-With no split subnets configured, `split` fails loudly instead of guessing.
-The selected profile is committed, so it survives reboots. The tunnel only
-comes alive once keys and an endpoint exist.
-
-- **3-position slider** (BTN_0 + BTN_1, combos `00` / `01` / `10` left to
-  right) drives `wg-profile` through `/etc/hotplug.d/button/90-slider-wg`;
-  every move is logged (`logread -f slider`).
-- **Facade button** is a hard on/off for the tunnel: each press toggles `wg0`
-  down/up regardless of the slider position (`/etc/rc.button/wps`). A kill
-  lasts until the next button press, slider move or reboot: `wg-profile` ends
-  with `ifup wg0`, so any slider move restores the tunnel with the selected
-  profile.
-
-## Optimizations applied
-
-| Change | Why |
-|---|---|
-| IPv6 off on LAN (`ra`/`dhcpv6`/`ndp` disabled, `lan.ipv6='0'`), `odhcpd` stopped + disabled | no IPv6 use while roaming; less RAM/CPU |
-| Software flow offloading (`firewall.@defaults[0].flow_offloading='1'`) | faster NAT on the MT7628 |
-| `dnsmasq` `logqueries='0'` | less log noise |
-| Explicit NTP client (`system.ntp`, pool servers, `enable_server='0'`) | reliable time for WG/logs while roaming |
-| Dropbear `SSHKeepAlive='60'` | fewer SSH drops on unstable uplinks |
-| apk opkg-cheatsheet login notice removed | noise at every SSH login |
-| Custom `/etc/banner` + `/etc/motd` | orientation at login |
-| `/etc/config/led`: usb=`usbport`, wps=tunnel indicator, wlan=`netdev` | useful signals only |
-
-Persistence: everything above is baked into the overlay (`config/files/`).
-The uci tweaks (IPv6, flow offloading, dnsmasq, odhcpd, dropbear keepalive, NTP)
-and the apk-notice removal run once at first boot via `99-travel-router` (the
-`FILES=` overlay can only add/overwrite files, so the notice is deleted by the
-script instead). A factory reset or reflash reapplies all of it.
-
-## Upgrades
-
-No OTA. When a new OpenWrt release drops:
-
-1. Bump `VERSION` (and `IB_SHA256` from the matching `sha256sums` file).
-2. `make image-luci` (site values regenerated from the current variables).
-3. Flash the new `sysupgrade.bin` via LuCI (*System > Backup/Flash firmware*)
-   or `scp` + `sysupgrade /tmp/*.bin` - config is preserved.
-   Use `-n` only for a factory-reset reflash.
-
-TFTP recovery stays the emergency path; a TFTP reflash wipes the config
-(rootfs is rewritten wholesale), so re-run `make provision` afterwards.
-
-## Recovery / brick ladder
-
-1. Failsafe boot: hold reset at power-on until the LED flashes fast early in
-   boot. Fixed `192.168.1.1`, no config applied. `ssh root@192.168.1.1`
-   (passwordless), `mount_root`, inspect and fix `/etc/config/network`, reboot.
-2. U-Boot TFTP recovery (this repo's `tftp-serve` + `flash-watch`): rewrites
-   the firmware partition, works whatever the OS state. On a fresh install,
-   SSH key auth comes straight from the image (`config/files/etc/dropbear/`).
-3. Serial console: 3.3 V, 115200 8N1, pads next to the LAN port (VCC, GND, RX, TX).
-
-Back to stock TP-Link firmware: strip its 512-byte header
-(`dd if=stock.bin of=tp_recovery.bin skip=257 bs=512`) and TFTP it.
+`split` fails clearly if `network.wg0.split_ips` is empty.
 
 ## Controls
 
+> Slider physical mapping/labels in this README may need field verification on
+> the actual device (deferred).
+
 ### 3-position slider
-The slider selects the default WireGuard routing policy:
+Selects the default WireGuard routing policy via `/etc/hotplug.d/button/90-slider-wg`.
+The current documented mapping is:
 
 | Position | Profile | LED `green:wps` | Usage |
 |---|---|---|---|
-| **Share ETH** (left) | `split` | Blink 5 Hz | Only traffic to your home network goes through the tunnel. Keeps direct access to the hotel/cafe LAN, printers or captive portals. |
-| **Share HotSpot** (middle) | `full` | Solid | All traffic goes through the tunnel. Ideal when sharing this router's connection via WiFi. |
-| **AP/Rng Ext / Client** (right) | `off` | Dark | Direct connection with no tunnel. Use the WPS button to re-enable the tunnel quickly without moving the slider. |
+| **Share ETH** (left) | `split` | Blink 5 Hz | Home-network traffic through tunnel; keeps local LAN/captive portal access patterns possible. |
+| **Share HotSpot** (middle) | `full` | Solid | All traffic through tunnel. |
+| **AP/Rng Ext / Client** (right) | `off` | Dark | No tunnel. |
 
 ### Front panel button (WPS)
-Temporary tunnel kill switch. Pressing it toggles `wg0` up/down regardless of the slider. While killed, the tunnel stays down until the next button press, slider move or reboot.
+Temporary tunnel kill switch (`/etc/rc.button/wps`): toggles `wg0` down/up
+regardless of slider, using `/tmp/.wg-kill`. Lasts until next button press,
+slider move, or reboot. Native WPS protocol is not used.
 
-The native WPS protocol is not used (security liability). While killed, the LED stays dark. On restore, the LED follows the current slider position.
+## Optimizations / hardening applied
 
-### LEDs
-| LED | Meaning |
+| Change | Why |
 |---|---|
-| `green:wps` | Tunnel state (dark = off/killed, blink 5 Hz = split, solid = full) |
-| `green:power` | Power |
-| `green:lan` / `green:wan` | LAN/WAN link/activity |
-| `green:wlan` / `mt76-phy1` | 2.4GHz / 5GHz activity |
-| `green:usb` | USB device present |
+| IPv6 off on LAN; `odhcpd` disabled | reduced surface/noise while roaming |
+| Flow offloading | better NAT performance on MT7628 |
+| `dnsmasq` `logqueries=0` | less log noise |
+| Explicit NTP client (`system.ntp`, pool, `enable_server=0`) | reliable time for WG/logs |
+| Dropbear conservative defaults (`SSHKeepAlive`, `GatewayPorts=0`, `MaxAuthTries=3`) | fewer drops; small hardening without lockout |
+| WiFi off, no factory SSID | explicit opt-in per trip |
+| apk opkg-cheatsheet notice removed | login noise |
+| Custom banner/motd, useful LEDs | operator clarity |
+
+Persistence: baked in `config/files/` and generated `config-gen/` scripts at
+build time; first-boot uci-defaults apply and are removed by OpenWrt.
+
+## DoH, captive portals, Raspberry Pi hook
+
+- **`DNS_REDIRECT=0` (default)**: safer for hotel/cafe captive portals.
+- **`DNS_REDIRECT=1`**: stronger DNS policy (intercepts 53/853) but can prevent
+  portal login before authentication. Use only if you accept that trade-off.
+- **Raspberry Pi / dedicated resolver**: use `DOH=custom` to point the router at
+  a DoH endpoint hosted on your Pi (LAN or over WG). Alternatively, keep
+  `DOH=off` and forward DNS to a trusted local resolver (future hook).
+
+## Dropbear gotchas (TL-WR902AC v3 / OpenWrt 25.12.6)
+
+Observed on this device/build (memory):
+- `RootPasswordAuth=off` (especially combined with password auth off) caused
+  root pubkey lockout/flapping.
+- Runtime dropbear restarts can temporarily break pubkey auth until recovery.
+
+Safe practice: keep a session open, test a second SSH login after changes, never
+bake `RootPasswordAuth=off` by default for this model. Port 22 is kept (LAN
+exposure context; port change is mostly obscurity).
+
+## Upgrades
+
+1. Bump `VERSION` / `IB_SHA256`.
+2. Rebuild (`make image-luci ...`).
+3. Flash `sysupgrade.bin` via LuCI or `sysupgrade` (config preserved; use `-n`
+   only for factory reset).
+4. TFTP reflash rewrites firmware/config; rerun `make provision` after recovery.
+
+## Recovery / brick ladder
+
+1. Failsafe boot: hold reset at power-on until early fast flash. `192.168.1.1`,
+   passwordless root, `mount_root`.
+2. U-Boot TFTP recovery (`tftp-serve` + `flash-watch`).
+3. Serial console: 3.3V, 115200 8N1.
 
 ## License
 
@@ -231,6 +225,5 @@ MIT - see [LICENSE](LICENSE).
 ## Sources
 
 - Device page: https://openwrt.org/toh/tp-link/tl-wr902ac_v3
-- Original support commit (DTS, buttons/LEDs):
-  https://lists.infradead.org/pipermail/lede-dev/2018-March/011566.html
-- Current DTS: https://raw.githubusercontent.com/openwrt/openwrt/main/target/linux/ramips/dts/mt76x8/tplink_tl-wr902ac-v3.dts
+- OpenWrt ImageBuilder: https://openwrt.org/docs/guide-user/additional-software/imagebuilder
+- https-dns-proxy: https://github.com/openwrt/packages/tree/openwrt-25.12/net/https-dns-proxy

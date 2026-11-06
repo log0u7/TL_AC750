@@ -1,5 +1,6 @@
-tpac750 ready
+tpac750 ready (secure travel router)
 
-Use 'wg show' for WireGuard status
-WPS button toggles wg0 (green:wps LED)
+Use 'wg show' or 'wg-profile show' for tunnel status
+Front panel button toggles wg0 (green:wps LED)
+Public/travel networks: verify WG peer, DNS policy, and captive portal before trusting traffic.
 

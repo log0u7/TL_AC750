@@ -12,13 +12,30 @@ IB_URL  := https://downloads.openwrt.org/releases/$(VERSION)/targets/$(TARGET)/$
 IB_DIR  := $(IB_LOC)/$(IB_NAME)
 IB_BIN  := $(IB_DIR)/bin/targets/$(TARGET)
 
-LAN_IP    ?= 192.168.10.254/24
-HOSTNAME  ?= tpac750
-TZ        ?= Europe/Paris
+# Site/runtime defaults (overridable at build time)
+LAN_IP        ?= 192.168.10.254/24
+HOSTNAME      ?= tpac750
+TZ            ?= Europe/Paris
+NTP_SERVERS   ?= 0.openwrt.pool.ntp.org 1.openwrt.pool.ntp.org 2.openwrt.pool.ntp.org 3.openwrt.pool.ntp.org
+SSH_KEEPALIVE ?= 60
+
+# DNS over HTTPS (optional). DOH=off|quad9|quad9-unfiltered|cloudflare|adguard|dns4eu|google|custom
+DOH              ?= off
+DOH_CUSTOM_URL   ?=
+DOH_BOOTSTRAP    ?=
+# DNS leak redirect via https-dns-proxy force_dns (captive-portal risk). 0=recommended default.
+DNS_REDIRECT      ?= 0
+DNS_REDIRECT_PORTS ?= 53 853
+
 GEN       := $(CURDIR)/config-gen
 
-PKG_min  := wireguard-tools luci-proto-wireguard kmod-wireguard -ppp -ppp-mod-pppoe
-PKG_luci := $(PKG_min) luci
+PKG_DOH :=
+ifneq ($(DOH),off)
+PKG_DOH := https-dns-proxy
+endif
+
+PKG_min  := wireguard-tools luci-proto-wireguard kmod-wireguard $(PKG_DOH) -ppp -ppp-mod-pppoe
+PKG_luci := wireguard-tools luci-proto-wireguard kmod-wireguard luci $(PKG_DOH) $(if $(filter-out off,$(DOH)),luci-app-https-dns-proxy,) -ppp -ppp-mod-pppoe
 
 # declarative config overlay: static files in config/files, site values in
 # config-gen (generated per build from LAN_IP/HOSTNAME/TZ)
@@ -43,13 +60,17 @@ WG_IFACE  ?= wg0
 .PHONY: help deps imagebuilder image-min image-luci tftp-prepare tftp-serve tftp-stop flash-watch pc-ip pc-ip-restore provision-ssh clean
 
 help: ## show this help
-	@echo "Variables: VERSION=$(VERSION) PROFILE=$(PROFILE) VARIANT=$(VARIANT) LAN_IP=$(LAN_IP) HOSTNAME=$(HOSTNAME) TZ=$(TZ)"
-	@echo "           TFTP_ROOT=$(TFTP_ROOT) TFTP_IP=$(TFTP_IP) DEV=$(DEV) CONN=\"$(CONN)\""
+	@echo "Variables: VERSION=$(VERSION) PROFILE=$(PROFILE) VARIANT=$(VARIANT)"
+	@echo "  site:  LAN_IP=$(LAN_IP) HOSTNAME=$(HOSTNAME) TZ=$(TZ)"
+	@echo "  ntp:   NTP_SERVERS=$(NTP_SERVERS)"
+	@echo "  doh:   DOH=$(DOH) DNS_REDIRECT=$(DNS_REDIRECT) DNS_REDIRECT_PORTS=$(DNS_REDIRECT_PORTS)"
+	@echo "         DOH_CUSTOM_URL=$(DOH_CUSTOM_URL) DOH_BOOTSTRAP=$(DOH_BOOTSTRAP)"
+	@echo "  flash: TFTP_ROOT=$(TFTP_ROOT) TFTP_IP=$(TFTP_IP) DEV=$(DEV) CONN=\"$(CONN)\""
 	@echo
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  %-16s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 	@echo
-	@echo "  WARNING: pc-ip / tftp-serve / tftp-stop mutate host state (NetworkManager,"
-	@echo "           root, ufw). Revert with pc-ip-restore, tftp-stop."
+	@echo "  WARNING: pc-ip / tftp-serve / tftp-stop mutate host state (NetworkManager, root, ufw)."
+	@echo "  Security: DNS_REDIRECT=1 can break captive portals; dropbear hardening is conservative by default."
 
 deps: ## check host build dependencies
 	@for c in make gcc zstd xz file python3 gawk curl; do \
@@ -67,10 +88,70 @@ imagebuilder: ## download + verify + extract the ImageBuilder
 	@echo "imagebuilder ready: $(IB_DIR)"
 
 define build_variant
+	@case "$(DOH)" in off|quad9|quad9-unfiltered|cloudflare|adguard|dns4eu|google|custom) ;; *) echo "invalid DOH=$(DOH) (use off|quad9|quad9-unfiltered|cloudflare|adguard|dns4eu|google|custom)"; exit 1;; esac
+	@if [ "$(DOH)" = custom ] && [ -z "$(DOH_CUSTOM_URL)" ]; then echo "DOH=custom requires DOH_CUSTOM_URL"; exit 1; fi
 	rm -rf $(GEN) && mkdir -p $(3) $(GEN)
 	cp -a $(CURDIR)/config/files/. $(GEN)/
-	printf '#!/bin/sh\nuci set network.lan.ipaddr="$(LAN_IP)"\nuci -q delete network.lan.netmask\nuci set system.@system[0].hostname="$(HOSTNAME)"\nuci set system.@system[0].timezone="$(TZ)"\nuci set system.@system[0].zonename="$(TZ)"\nuci commit system\nuci commit network\n' > $(GEN)/etc/uci-defaults/99-site-config
+	{ \
+	  echo '#!/bin/sh'; \
+	  echo 'uci set network.lan.ipaddr="$(LAN_IP)"'; \
+	  echo 'uci -q delete network.lan.netmask'; \
+	  echo 'uci set system.@system[0].hostname="$(HOSTNAME)"'; \
+	  echo 'uci set system.@system[0].timezone="$(TZ)"'; \
+	  echo 'uci set system.@system[0].zonename="$(TZ)"'; \
+	  echo 'uci -q delete system.ntp.server'; \
+	  echo "uci set system.ntp.enabled='1'"; \
+	  echo "uci set system.ntp.enable_server='0'"; \
+	  for s in $(NTP_SERVERS); do echo "uci add_list system.ntp.server='$$s'"; done; \
+	  echo 'uci set dropbear.@dropbear[0].SSHKeepAlive="$(SSH_KEEPALIVE)"'; \
+	  echo "uci -q delete dropbear.@dropbear[0].KeepAlive"; \
+	  echo "uci set dropbear.@dropbear[0].GatewayPorts='0'"; \
+	  echo "uci set dropbear.@dropbear[0].MaxAuthTries='3'"; \
+	  echo 'uci commit system'; echo 'uci commit network'; echo 'uci commit dropbear'; \
+	} > $(GEN)/etc/uci-defaults/99-site-config
 	chmod 755 $(GEN)/etc/uci-defaults/99-site-config
+	@if [ "$(DOH)" != off ]; then \
+	  case "$(DOH)" in \
+	    quad9) url='https://dns.quad9.net/dns-query'; boot='9.9.9.9,149.112.112.112';; \
+	    quad9-unfiltered) url='https://dns10.quad9.net/dns-query'; boot='9.9.9.10,149.112.112.10';; \
+	    cloudflare) url='https://cloudflare-dns.com/dns-query'; boot='1.1.1.1,1.0.0.1';; \
+	    adguard) url='https://dns.adguard-dns.com/dns-query'; boot='94.140.14.14,94.140.15.15';; \
+	    dns4eu) url='https://protective.joindns4.eu/dns-query'; boot='86.54.11.1,86.54.11.201';; \
+	    google) url='https://dns.google/dns-query'; boot='8.8.8.8,8.8.4.4';; \
+	    custom) url='$(DOH_CUSTOM_URL)'; boot='$(DOH_BOOTSTRAP)';; \
+	  esac; \
+	  if [ "$(DOH)" = custom ] && [ -z "$$boot" ]; then boot='1.1.1.1,9.9.9.9'; fi; \
+	  { \
+	    echo '#!/bin/sh'; \
+	    echo '# Generated DoH config (secure travel router build option).'; \
+	    echo '# Replaces package default instances; verify provider endpoints for your region/policy.'; \
+	    echo 'while uci -q delete https-dns-proxy.@https-dns-proxy[0]; do :; done'; \
+	    echo "uci set https-dns-proxy.config=main"; \
+	    echo "uci set https-dns-proxy.config.dnsmasq_config_update='*'"; \
+	    echo "uci set https-dns-proxy.config.force_dns='$(DNS_REDIRECT)'"; \
+	    echo "uci set https-dns-proxy.config.notrack_dns='1'"; \
+	    echo "uci -q delete https-dns-proxy.config.force_dns_port"; \
+	    for p in $(DNS_REDIRECT_PORTS); do echo "uci add_list https-dns-proxy.config.force_dns_port='$$p'"; done; \
+	    echo "uci -q delete https-dns-proxy.config.force_dns_src_interface"; \
+	    echo "uci add_list https-dns-proxy.config.force_dns_src_interface='lan'"; \
+	    echo "uci set https-dns-proxy.config.canary_domains_icloud='1'"; \
+	    echo "uci set https-dns-proxy.config.canary_domains_mozilla='1'"; \
+	    echo "uci set https-dns-proxy.config.procd_trigger_wan6='0'"; \
+	    echo "uci set https-dns-proxy.config.heartbeat_domain='heartbeat.mossdef.org'"; \
+	    echo "uci set https-dns-proxy.config.heartbeat_sleep_timeout='10'"; \
+	    echo "uci set https-dns-proxy.config.heartbeat_wait_timeout='10'"; \
+	    echo "uci set https-dns-proxy.config.user='nobody'"; \
+	    echo "uci set https-dns-proxy.config.group='nogroup'"; \
+	    echo "uci set https-dns-proxy.config.listen_addr='127.0.0.1'"; \
+	    echo "uci set https-dns-proxy.config.force_ip_family='auto'"; \
+	    echo "uci set https-dns-proxy.dns1=https-dns-proxy"; \
+	    echo "uci set https-dns-proxy.dns1.bootstrap_dns='$$boot'"; \
+	    echo "uci set https-dns-proxy.dns1.resolver_url='$$url'"; \
+	    echo "uci set https-dns-proxy.dns1.listen_port='5053'"; \
+	    echo 'uci commit https-dns-proxy'; \
+	  } > $(GEN)/etc/uci-defaults/99-doh-config; \
+	  chmod 755 $(GEN)/etc/uci-defaults/99-doh-config; \
+	fi
 	$(MAKE) -C $(IB_DIR) image PROFILE=$(PROFILE) PACKAGES="$(2)" FILES="$(GEN)"
 	cd $(IB_BIN) && sha256sum -c sha256sums
 	cp $(IB_BIN)/openwrt-$(VERSION)-ramips-mt76x8-$(PROFILE)* $(3)/

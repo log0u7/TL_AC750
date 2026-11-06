@@ -67,16 +67,12 @@ uci set firewall.@defaults[0].flow_offloading='1'
 uci set dhcp.@dnsmasq[0].logqueries='0'
 /etc/init.d/odhcpd disable 2>/dev/null || true
 
-# --- SSH: keepalive for unstable travel uplinks ---
-uci set dropbear.@dropbear[0].SSHKeepAlive='60'
-
-# --- NTP: explicit client config (no NTP server on a travel router) ---
-uci -q delete system.ntp.server
+# --- SSH/NTP base: generated 99-site-config sets SSHKeepAlive + NTP_SERVERS per build.
+# Conservative dropbear defaults (no RootPasswordAuth/PasswordAuth lockout changes).
+uci set dropbear.@dropbear[0].GatewayPorts='0'
+uci set dropbear.@dropbear[0].MaxAuthTries='3'
 uci set system.ntp.enabled='1'
 uci set system.ntp.enable_server='0'
-for s in 0.openwrt.pool.ntp.org 1.openwrt.pool.ntp.org 2.openwrt.pool.ntp.org 3.openwrt.pool.ntp.org; do
-	uci add_list system.ntp.server="$s"
-done
 
 # base image ships an apk-vs-opkg login notice; the FILES= overlay can only
 # add/overwrite files, so remove it here at first boot
