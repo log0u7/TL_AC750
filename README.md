@@ -71,15 +71,23 @@ make image-luci DOH=quad9 DNS_REDIRECT=0
 make image-luci DOH=custom DOH_CUSTOM_URL='https://dns.example.net/dns-query' DOH_BOOTSTRAP='192.168.10.2'
 ```
 
-Provider endpoints are selected from common defaults in the Makefile; verify the
-exact endpoint/policy for your region before relying on it. Quad9 service for
-France was announced to stop on 2026-11-24, so keep an alternate provider/custom
-endpoint ready.
-
 When `DOH!=off`, the build adds `https-dns-proxy` (+ `luci-app-https-dns-proxy`
 for `luci`) and generates `99-doh-config`, replacing package default instances.
 On this 8 MB / 64 MB target, **validate image size and runtime RAM** before
 deployment.
+
+| `DOH` value | Default endpoint intent | Notes |
+|---|---|---|
+| `quad9` | Quad9 filtered DoH | **France service announced to stop 2026-11-24**; keep an alternate ready. |
+| `quad9-unfiltered` | Quad9 no-threat-blocking DoH | Same jurisdiction/availability risk. |
+| `cloudflare` | Cloudflare DoH | Broad availability; verify policy/jurisdiction for your use. |
+| `adguard` | AdGuard DoH | Filtering/policy differs by endpoint variant; verify. |
+| `dns4eu` | DNS4EU protective DoH | EU-focused option; verify current policy/blocks. |
+| `google` | Google DoH | Robust; less privacy-first. |
+| `custom` | `DOH_CUSTOM_URL` | Best hook for a Raspberry Pi / self-hosted resolver. |
+
+Verify endpoints/bootstrap IPs in the Makefile and upstream provider templates
+before production use. Provider availability and policies can change.
 
 ## Flash (U-Boot TFTP recovery)
 
@@ -122,6 +130,16 @@ settings.
 | WiFi SSID/PSK | LuCI > Network > Wireless, or uci |
 | WG peer (server pubkey, endpoint) | LuCI/LuCI-proto-wireguard or uci |
 | split-tunnel subnets | `uci set network.wg0.split_ips='a.b.c.d/e ...'` |
+
+## Quick hardening checklist (post-flash)
+
+- [ ] SSH key login works in a **new** session before closing the current one.
+- [ ] Set a strong root password or use key-only **only** with tested recovery path (on this model, avoid `RootPasswordAuth=off`).
+- [ ] Provision WG keys (`make keygen`/`make provision`), set server pubkey/endpoint, test `wg-profile show` and handshake.
+- [ ] If using DoH: verify resolver, test DNS resolution, keep `DNS_REDIRECT=0` first on captive-portal networks.
+- [ ] Before trusting traffic on public WiFi: confirm tunnel/profile, DNS behavior, and captive portal completed.
+- [ ] Physically verify slider position mapping (deferred) and label behavior.
+- [ ] Backup working config (`sysupgrade -b ...`) after validation.
 
 ## WireGuard
 
