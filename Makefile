@@ -14,7 +14,7 @@ IB_BIN  := $(IB_DIR)/bin/targets/$(TARGET)
 
 # Site/runtime defaults (overridable at build time)
 LAN_IP        ?= 192.168.10.254/24
-HOSTNAME      ?= tpac750
+HOSTNAME      ?= ac750
 TZ            ?= Europe/Paris
 NTP_SERVERS   ?= 0.openwrt.pool.ntp.org 1.openwrt.pool.ntp.org 2.openwrt.pool.ntp.org 3.openwrt.pool.ntp.org
 SSH_KEEPALIVE ?= 60

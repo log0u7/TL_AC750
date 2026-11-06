@@ -54,7 +54,7 @@ Both variants include WireGuard packages and drop `ppp`/`ppp-mod-pppoe`.
 |---|---|---|
 | `VARIANT` | `luci` | `min` (SSH-only) or `luci` (web UI) |
 | `LAN_IP` | `192.168.10.254/24` | router LAN address (CIDR) |
-| `HOSTNAME` | `tpac750` | system hostname |
+| `HOSTNAME` | `ac750` | system hostname |
 | `TZ` | `Europe/Paris` | timezone/zonename (build-time) |
 | `NTP_SERVERS` | OpenWrt pool (4 servers) | explicit `system.ntp` client, `enable_server=0` |
 | `DOH` | `off` | `off|quad9|quad9-unfiltered|cloudflare|adguard|dns4eu|google|custom` |
