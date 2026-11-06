@@ -161,15 +161,17 @@ comes alive once keys and an endpoint exist.
 | IPv6 off on LAN (`ra`/`dhcpv6`/`ndp` disabled, `lan.ipv6='0'`), `odhcpd` stopped + disabled | no IPv6 use while roaming; less RAM/CPU |
 | Software flow offloading (`firewall.@defaults[0].flow_offloading='1'`) | faster NAT on the MT7628 |
 | `dnsmasq` `logqueries='0'` | less log noise |
+| Explicit NTP client (`system.ntp`, pool servers, `enable_server='0'`) | reliable time for WG/logs while roaming |
+| Dropbear `SSHKeepAlive='60'` | fewer SSH drops on unstable uplinks |
 | apk opkg-cheatsheet login notice removed | noise at every SSH login |
 | Custom `/etc/banner` + `/etc/motd` | orientation at login |
 | `/etc/config/led`: usb=`usbport`, wps=tunnel indicator, wlan=`netdev` | useful signals only |
 
 Persistence: everything above is baked into the overlay (`config/files/`).
-The uci tweaks (IPv6, flow offloading, dnsmasq, odhcpd) and the apk-notice
-removal run once at first boot via `99-travel-router` (the `FILES=` overlay
-can only add/overwrite files, so the notice is deleted by the script
-instead). A factory reset or reflash reapplies all of it.
+The uci tweaks (IPv6, flow offloading, dnsmasq, odhcpd, dropbear keepalive, NTP)
+and the apk-notice removal run once at first boot via `99-travel-router` (the
+`FILES=` overlay can only add/overwrite files, so the notice is deleted by the
+script instead). A factory reset or reflash reapplies all of it.
 
 ## Upgrades
 

@@ -59,6 +59,7 @@ case "${1:-show}" in
         uci -q delete network."$peer".allowed_ips
         case "$1" in
             split)
+                [ -n "$SPLIT_IPS" ] || { echo "split profile requires network.wg0.split_ips (uci set network.wg0.split_ips='a.b.c.d/e ...')"; exit 1; }
                 for ip in $SPLIT_IPS; do
                     uci add_list network."$peer".allowed_ips="$ip"
                 done
