@@ -10,7 +10,6 @@ fstools - 2026.05.23~16718b6e-r1
 fwtool - 2025.10.03~04cd252e-r1
 getrandom - 2025.10.30~6f78fa49-r1
 hostapd-common - 2025.08.26~ca266cc2-r7
-https-dns-proxy - 2026.05.06-r1
 ip-tiny - 6.18.0-r2
 iw - 6.17-r1
 jansson4 - 2.14.1-r1
@@ -74,9 +73,6 @@ kmod-usb2 - 6.12.112-r1
 kmod-wireguard - 6.12.112-r1
 libblobmsg-json20260213 - 2026.11.02~ff13b89e-r1
 libc - 1.2.5-r5
-libcares - 1.34.9-r1
-libcurl4 - 8.23.0-r1
-libev - 4.33-r3
 libgcc1 - 14.3.0-r5
 libiwinfo-data - 2026.05.26~66bdd1a0-r1
 libiwinfo20230701 - 2026.05.26~66bdd1a0-r1
@@ -87,7 +83,6 @@ liblucihttp0 - 2023.03.15~9b5b683f-r1
 libmbedtls21 - 3.6.7-r1
 libmnl0 - 1.0.5-r1
 libnftnl11 - 1.3.1-r1
-libnghttp2-14 - 1.70.0-r1
 libnl-tiny1 - 2025.12.02~40493a65-r1
 libubox20260213 - 2026.11.02~ff13b89e-r1
 libubus20251202 - 2026.06.28~24864e78-r2
@@ -99,7 +94,6 @@ libustream-mbedtls20201210 - 2026.03.01~99f1c0db-r1
 logd - 2025.10.30~6f78fa49-r1
 luci - 26.304.26398~e969939
 luci-app-firewall - 26.304.26398~e969939
-luci-app-https-dns-proxy - 2026.05.06-r1
 luci-app-package-manager - 26.304.26398~e969939
 luci-base - 26.304.26398~e969939
 luci-lib-uqr - 26.304.26398~e969939
