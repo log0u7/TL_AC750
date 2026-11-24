@@ -57,7 +57,7 @@ Both variants include WireGuard packages and drop `ppp`/`ppp-mod-pppoe`.
 | `HOSTNAME` | `ac750` | system hostname |
 | `TZ` | `Europe/Paris` | timezone/zonename (build-time) |
 | `NTP_SERVERS` | OpenWrt pool (4 servers) | explicit `system.ntp` client, `enable_server=0` |
-| `DOH` | `off` | `off|quad9|quad9-unfiltered|cloudflare|adguard|dns4eu|google|custom` |
+| `DOH` | `off` | `off|dns4eu|quad9|quad9-unfiltered|cloudflare|adguard|google|custom` (`dns4eu` recommended for FR/EU) |
 | `DOH_CUSTOM_URL` | empty | required when `DOH=custom` (RFC 8484 URL). Hook for self-hosted resolver / Raspberry Pi DoH endpoint. |
 | `DOH_BOOTSTRAP` | provider-specific | bootstrap DNS IPs for resolving the DoH hostname |
 | `DNS_REDIRECT` | `0` | `1` sets `https-dns-proxy force_dns=1` (intercepts LAN DNS ports). **May break captive portals**. |
@@ -78,11 +78,11 @@ deployment.
 
 | `DOH` value | Default endpoint intent | Notes |
 |---|---|---|
-| `quad9` | Quad9 filtered DoH | **France service announced to stop 2026-11-24**; keep an alternate ready. |
-| `quad9-unfiltered` | Quad9 no-threat-blocking DoH | Same jurisdiction/availability risk. |
+| `dns4eu` | DNS4EU protective DoH | **Recommended default for FR/EU use.** |
+| `quad9` | Quad9 filtered DoH | **Stopped serving France since 2026-11-24.** Still valid outside FR. |
+| `quad9-unfiltered` | Quad9 no-threat-blocking DoH | Same FR stop since 2026-11-24. |
 | `cloudflare` | Cloudflare DoH | Broad availability; verify policy/jurisdiction for your use. |
 | `adguard` | AdGuard DoH | Filtering/policy differs by endpoint variant; verify. |
-| `dns4eu` | DNS4EU protective DoH | EU-focused option; verify current policy/blocks. |
 | `google` | Google DoH | Robust; less privacy-first. |
 | `custom` | `DOH_CUSTOM_URL` | Best hook for a Raspberry Pi / self-hosted resolver. |
 
